@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -69,7 +69,7 @@ def register_import_tools(mcp: FastMCP):
         local_imscc_path: str,
         course_name: str,
         account_id: int,
-        term_id: Optional[int] = None,
+        term_id: int | None = None,
         publish: bool = False,
     ) -> str:
         """Create a new Canvas course and import an IMSCC package from a local file.
@@ -182,6 +182,8 @@ def register_import_tools(mcp: FastMCP):
 
         final_state = final_migration.get("workflow_state", "unknown")
         progress = final_migration.get("progress", 0)
+        status_url = final_migration.get("url") or f"/api/v1/courses/{course_id}/content_migrations/{migration_id}"
+        progress_url = final_migration.get("progress_url") or status_url
         issues_url = final_migration.get("migration_issues_url") or f"/api/v1/courses/{course_id}/content_migrations/{migration_id}/migration_issues"
 
         # Optional publish
@@ -206,6 +208,8 @@ def register_import_tools(mcp: FastMCP):
             f"Migration ID: {migration_id}\n"
             f"Workflow State: {final_state}\n"
             f"Progress: {progress}%\n"
+            f"Migration Status Endpoint: {status_url}\n"
+            f"Migration Progress Endpoint: {progress_url}\n"
             f"Migration Issues Endpoint: {issues_url}\n"
             f"Published: {publish_note}"
         )

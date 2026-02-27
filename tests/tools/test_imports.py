@@ -19,6 +19,7 @@ def mock_import_api():
 
 def get_tool_function(tool_name: str):
     from mcp.server.fastmcp import FastMCP
+
     from canvas_mcp.tools.imports import register_import_tools
 
     mcp = FastMCP("test")
@@ -80,7 +81,14 @@ class TestImportImsccToNewCourse:
                 },
             },
             {'id': 7001, 'workflow_state': 'running', 'progress': 35},
-            {'id': 7001, 'workflow_state': 'completed', 'progress': 100, 'migration_issues_url': '/issues'},
+            {
+                'id': 7001,
+                'workflow_state': 'completed',
+                'progress': 100,
+                'url': '/api/v1/courses/9001/content_migrations/7001',
+                'progress_url': '/api/v1/progress/12345',
+                'migration_issues_url': '/issues'
+            },
             {'id': 9001, 'workflow_state': 'available'},
         ]
         mock_import_api['upload_file_to_storage'].return_value = {'success': True}
@@ -98,6 +106,9 @@ class TestImportImsccToNewCourse:
         assert 'Course ID: 9001' in result
         assert 'Migration ID: 7001' in result
         assert 'Progress: 100%' in result
+        assert 'Migration Status Endpoint: /api/v1/courses/9001/content_migrations/7001' in result
+        assert 'Migration Progress Endpoint: /api/v1/progress/12345' in result
+        assert 'Migration Issues Endpoint: /issues' in result
         assert 'Published: Yes' in result
 
     @pytest.mark.asyncio

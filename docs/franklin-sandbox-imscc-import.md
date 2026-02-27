@@ -13,7 +13,7 @@ This repo now includes a Canvas MCP tool to import a local `.imscc` package into
 3. Creates a `common_cartridge_importer` content migration using pre-attachment upload flow
 4. Uploads the local `.imscc` to Canvas storage URL
 5. Polls migration until terminal status (`completed` or `failed`)
-6. Returns migration status, progress, and migration issues endpoint
+6. Returns migration status + progress endpoints, current status/progress, and migration issues endpoint
 7. Optionally publishes the destination course (`publish=True`)
 
 ## Required Franklin sandbox config

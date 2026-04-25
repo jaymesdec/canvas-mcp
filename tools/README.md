@@ -104,15 +104,23 @@ These tools provide instructors and TAs with course management, grading, analyti
 ### Assignment Management
 
 #### `list_assignments`
-List all assignments for a course.
+List assignments for a course with optional filtering, pagination, and payload trimming.
 
 **Parameters:**
-- `course_identifier`: Course code (e.g., "badm_350_120251_246794") or ID
+- `course_identifier` (required): Course code (e.g., "badm_350_120251_246794") or ID
+- `search_term` (optional): Search assignments by title (passed to Canvas API, best-effort)
+- `per_page` (optional): Results per page, 1-100 (default 100)
+- `page` (optional): Specific page number. When provided, returns only that page instead of all pages. Use with `per_page` for manual pagination of large courses.
+- `due_after` (optional): ISO 8601 date — only return assignments due on or after this date (client-side filter; assignments with no due date are excluded)
+- `due_before` (optional): ISO 8601 date — only return assignments due on or before this date (client-side filter; assignments with no due date are excluded)
+- `published_only` (optional): When true, exclude unpublished assignments (default false)
+- `include_description` (optional): When false, strip description, rubric, and rubric_settings from response to reduce payload size (default true)
 
 **Example:**
 ```
 "Show me all assignments in BADM 350"
-"List assignments for my Spring 2025 course"
+"What assignments are due this week in DES 226?"
+"List published assignments for course 12345 without descriptions"
 ```
 
 ---

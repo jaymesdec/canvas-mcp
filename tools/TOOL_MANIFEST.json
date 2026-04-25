@@ -106,19 +106,65 @@
     {
       "name": "list_assignments",
       "category": "educator",
-      "description": "List all assignments for a course",
+      "description": "List assignments for a course with optional filtering, pagination, and payload trimming",
       "parameters": [
         {
           "name": "course_identifier",
           "type": "string | integer",
           "required": true,
           "description": "Course code or Canvas ID"
+        },
+        {
+          "name": "search_term",
+          "type": "string",
+          "required": false,
+          "description": "Search assignments by title (passed to Canvas API)"
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "required": false,
+          "default": 100,
+          "description": "Results per page, 1-100"
+        },
+        {
+          "name": "page",
+          "type": "integer",
+          "required": false,
+          "description": "Specific page number for manual pagination"
+        },
+        {
+          "name": "due_after",
+          "type": "string",
+          "required": false,
+          "description": "ISO 8601 date — only assignments due on or after this date"
+        },
+        {
+          "name": "due_before",
+          "type": "string",
+          "required": false,
+          "description": "ISO 8601 date — only assignments due on or before this date"
+        },
+        {
+          "name": "published_only",
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "When true, exclude unpublished assignments"
+        },
+        {
+          "name": "include_description",
+          "type": "boolean",
+          "required": false,
+          "default": true,
+          "description": "When false, strip description, rubric, and rubric_settings from response"
         }
       ],
-      "returns": "List of assignments with IDs, names, due dates, points",
+      "returns": "List of assignments with IDs, names, due dates, points (optionally filtered and trimmed)",
       "examples": [
         "Show me all assignments in BADM 350",
-        "List assignments for course 12345"
+        "What assignments are due this week in DES 226?",
+        "List published assignments for course 12345 without descriptions"
       ]
     },
     {

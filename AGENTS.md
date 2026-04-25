@@ -37,7 +37,7 @@ Course management, grading, and analytics. Requires instructor/TA role.
 
 | Tool | Purpose |
 |------|---------|
-| `list_assignments` | All assignments in a course |
+| `list_assignments` | Assignments in a course (supports filtering by date range, published status, search, and pagination) |
 | `get_assignment_details` | Full assignment info including description |
 | `list_submissions` | Student submissions for grading |
 | `get_assignment_analytics` | Performance statistics |

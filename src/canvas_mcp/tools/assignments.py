@@ -18,20 +18,76 @@ def register_assignment_tools(mcp: FastMCP):
 
     @mcp.tool()
     @validate_params
-    async def list_assignments(course_identifier: str | int) -> str:
-        """List assignments for a specific course.
+    async def list_assignments(
+        course_identifier: str | int,
+        search_term: str | None = None,
+        per_page: int | None = None,
+        page: int | None = None,
+        due_after: str | None = None,
+        due_before: str | None = None,
+        published_only: bool = False,
+        include_description: bool = True,
+    ) -> str:
+        """List assignments for a course with optional filtering and pagination.
+
+        Supports date range filtering, search, pagination, and payload trimming
+        for large courses. All filter parameters are optional — defaults match
+        the previous behavior (return all assignments with full details).
 
         Args:
             course_identifier: The Canvas course code (e.g., badm_554_120251_246794) or ID
+            search_term: Search assignments by title (passed to Canvas API, best-effort)
+            per_page: Results per page, 1-100 (default 100)
+            page: Specific page number to fetch. When provided, returns only that page
+                instead of auto-fetching all pages. Use with per_page for manual pagination.
+            due_after: ISO 8601 date — only return assignments due on or after this date
+                (client-side filter; assignments with no due date are excluded)
+            due_before: ISO 8601 date — only return assignments due on or before this date
+                (client-side filter; assignments with no due date are excluded)
+            published_only: When true, exclude unpublished assignments (client-side filter)
+            include_description: When false, strip description, rubric, and rubric_settings
+                from the response to reduce payload size (default true)
         """
         course_id = await get_course_id(course_identifier)
 
-        params = {
-            "per_page": 100,
-            "include[]": ["all_dates", "submission"]
-        }
+        # Validate per_page
+        effective_per_page = 100
+        if per_page is not None:
+            if per_page < 1 or per_page > 100:
+                return "Invalid per_page: must be between 1 and 100."
+            effective_per_page = per_page
 
-        all_assignments = await fetch_all_paginated_results(f"/courses/{course_id}/assignments", params)
+        # Validate date params early
+        parsed_due_after = None
+        if due_after:
+            parsed_due_after = parse_date(due_after)
+            if not parsed_due_after:
+                return f"Invalid date format for due_after: '{due_after}'. Use ISO 8601 format (e.g., '2026-04-18T00:00:00Z' or '2026-04-18')."
+
+        parsed_due_before = None
+        if due_before:
+            parsed_due_before = parse_date(due_before)
+            if not parsed_due_before:
+                return f"Invalid date format for due_before: '{due_before}'. Use ISO 8601 format (e.g., '2026-04-25T23:59:00Z' or '2026-04-25')."
+
+        # Build Canvas API params
+        params: dict = {
+            "per_page": effective_per_page,
+            "include[]": ["all_dates", "submission"],
+        }
+        if search_term:
+            params["search_term"] = search_term
+
+        # Fetch assignments: single-page or all-pages
+        if page is not None:
+            params["page"] = page
+            response = await make_canvas_request("get", f"/courses/{course_id}/assignments", params=params)
+            if isinstance(response, dict) and "error" in response:
+                return f"Error fetching assignments: {response['error']}"
+            # make_canvas_request returns a list for list endpoints
+            all_assignments = response if isinstance(response, list) else [response]
+        else:
+            all_assignments = await fetch_all_paginated_results(f"/courses/{course_id}/assignments", params)
 
         if isinstance(all_assignments, dict) and "error" in all_assignments:
             return f"Error fetching assignments: {all_assignments['error']}"
@@ -39,8 +95,30 @@ def register_assignment_tools(mcp: FastMCP):
         if not all_assignments:
             return f"No assignments found for course {course_identifier}."
 
+        # Client-side filtering
+        filtered = all_assignments
+
+        if published_only:
+            filtered = [a for a in filtered if a.get("published", False)]
+
+        if parsed_due_after:
+            filtered = [
+                a for a in filtered
+                if a.get("due_at") and parse_date(a["due_at"]) and parse_date(a["due_at"]) >= parsed_due_after
+            ]
+
+        if parsed_due_before:
+            filtered = [
+                a for a in filtered
+                if a.get("due_at") and parse_date(a["due_at"]) and parse_date(a["due_at"]) <= parsed_due_before
+            ]
+
+        if not filtered:
+            return f"No assignments found matching filters for course {course_identifier}."
+
+        # Format response
         assignments_info = []
-        for assignment in all_assignments:
+        for assignment in filtered:
             assignment_id = assignment.get("id")
             name = assignment.get("name", "Unnamed assignment")
             due_at = assignment.get("due_at", "No due date")
@@ -49,9 +127,6 @@ def register_assignment_tools(mcp: FastMCP):
             assignment_group_id = assignment.get("assignment_group_id")
             created_at = assignment.get("created_at")
             has_overrides = assignment.get("has_overrides", False)
-            description = assignment.get("description", "")
-            rubric = assignment.get("rubric")
-            rubric_settings = assignment.get("rubric_settings")
 
             entry = f"ID: {assignment_id}\nName: {name}\nDue: {due_at}\nPoints: {points}\nPublished: {published}\n"
             if assignment_group_id:
@@ -60,12 +135,16 @@ def register_assignment_tools(mcp: FastMCP):
                 entry += f"Created: {created_at}\n"
             if has_overrides:
                 entry += f"Has Overrides: {has_overrides}\n"
-            if description:
-                entry += f"Description: {description}\n"
-            if rubric_settings:
-                entry += f"Rubric Settings: {rubric_settings}\n"
-            if rubric:
-                entry += f"Rubric: {rubric}\n"
+            if include_description:
+                description = assignment.get("description", "")
+                rubric_settings = assignment.get("rubric_settings")
+                rubric = assignment.get("rubric")
+                if description:
+                    entry += f"Description: {description}\n"
+                if rubric_settings:
+                    entry += f"Rubric Settings: {rubric_settings}\n"
+                if rubric:
+                    entry += f"Rubric: {rubric}\n"
             assignments_info.append(entry)
 
         # Try to get the course code for display

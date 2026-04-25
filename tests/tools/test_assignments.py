@@ -62,6 +62,387 @@ def get_tool_function(tool_name: str):
     return captured_functions.get(tool_name)
 
 
+# --- Mock data for list_assignments tests ---
+
+MOCK_ASSIGNMENTS = [
+    {
+        "id": 101,
+        "name": "EDA Notebook",
+        "due_at": "2026-04-20T23:59:00Z",
+        "points_possible": 50,
+        "published": True,
+        "assignment_group_id": 10,
+        "created_at": "2026-04-01T00:00:00Z",
+        "has_overrides": False,
+        "description": "<p>Explore the dataset.</p>",
+        "rubric": [{"id": "r1", "points": 50, "description": "Quality"}],
+        "rubric_settings": {"points_possible": 50},
+    },
+    {
+        "id": 102,
+        "name": "Final Report",
+        "due_at": "2026-04-28T23:59:00Z",
+        "points_possible": 100,
+        "published": True,
+        "assignment_group_id": 10,
+        "created_at": "2026-04-05T00:00:00Z",
+        "has_overrides": False,
+        "description": "<p>Write the final report.</p>",
+        "rubric": None,
+        "rubric_settings": None,
+    },
+    {
+        "id": 103,
+        "name": "Draft Outline",
+        "due_at": None,
+        "points_possible": 0,
+        "published": False,
+        "assignment_group_id": 11,
+        "created_at": "2026-04-10T00:00:00Z",
+        "has_overrides": False,
+        "description": "<p>Submit an outline draft.</p>",
+        "rubric": None,
+        "rubric_settings": None,
+    },
+    {
+        "id": 104,
+        "name": "Midterm Quiz",
+        "due_at": "2026-04-15T23:59:00Z",
+        "points_possible": 25,
+        "published": True,
+        "assignment_group_id": 12,
+        "created_at": "2026-03-20T00:00:00Z",
+        "has_overrides": False,
+        "description": "",
+        "rubric": None,
+        "rubric_settings": None,
+    },
+]
+
+
+class TestListAssignments:
+    """Tests for list_assignments tool with filtering and pagination."""
+
+    # --- Unit 1: Parameters and Canvas API pass-through ---
+
+    @pytest.mark.asyncio
+    async def test_default_params_unchanged(self, mock_canvas_api):
+        """Call with no new params behaves identically to current behavior."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251")
+
+        # Verify fetch_all_paginated_results was used (not make_canvas_request)
+        mock_canvas_api['fetch_all_paginated_results'].assert_called_once()
+        call_args = mock_canvas_api['fetch_all_paginated_results'].call_args
+        assert call_args[0][0] == "/courses/60366/assignments"
+        params = call_args[0][1]
+        assert params["per_page"] == 100
+        assert "include[]" in params
+
+        # Verify output contains all assignments
+        assert "EDA Notebook" in result
+        assert "Final Report" in result
+        assert "Draft Outline" in result
+        assert "Midterm Quiz" in result
+
+    @pytest.mark.asyncio
+    async def test_search_term_passed_to_api(self, mock_canvas_api):
+        """search_term appears in params passed to fetch_all_paginated_results."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = [MOCK_ASSIGNMENTS[0]]
+
+        list_assignments = get_tool_function('list_assignments')
+        await list_assignments("badm_350_120251", search_term="EDA")
+
+        call_args = mock_canvas_api['fetch_all_paginated_results'].call_args
+        params = call_args[0][1]
+        assert params["search_term"] == "EDA"
+
+    @pytest.mark.asyncio
+    async def test_per_page_custom_value(self, mock_canvas_api):
+        """per_page=50 is passed to Canvas API params."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        await list_assignments("badm_350_120251", per_page=50)
+
+        call_args = mock_canvas_api['fetch_all_paginated_results'].call_args
+        params = call_args[0][1]
+        assert params["per_page"] == 50
+
+    @pytest.mark.asyncio
+    async def test_page_uses_single_request(self, mock_canvas_api):
+        """page param triggers make_canvas_request instead of fetch_all_paginated_results."""
+        mock_canvas_api['make_canvas_request'].return_value = [MOCK_ASSIGNMENTS[0], MOCK_ASSIGNMENTS[1]]
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", page=2, per_page=25)
+
+        # Should use make_canvas_request, NOT fetch_all_paginated_results
+        mock_canvas_api['make_canvas_request'].assert_called_once()
+        mock_canvas_api['fetch_all_paginated_results'].assert_not_called()
+
+        call_args = mock_canvas_api['make_canvas_request'].call_args
+        assert call_args[0][0] == "get"
+        assert "/courses/60366/assignments" in call_args[0][1]
+        params = call_args[1]["params"]
+        assert params["page"] == 2
+        assert params["per_page"] == 25
+
+        assert "EDA Notebook" in result
+
+    @pytest.mark.asyncio
+    async def test_per_page_zero_returns_error(self, mock_canvas_api):
+        """per_page=0 returns a validation error."""
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", per_page=0)
+
+        assert "Invalid per_page" in result
+        mock_canvas_api['fetch_all_paginated_results'].assert_not_called()
+        mock_canvas_api['make_canvas_request'].assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_per_page_over_100_returns_error(self, mock_canvas_api):
+        """per_page=200 returns a validation error."""
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", per_page=200)
+
+        assert "Invalid per_page" in result
+        mock_canvas_api['fetch_all_paginated_results'].assert_not_called()
+
+    # --- Unit 2: Client-side filtering (dates, published) ---
+
+    @pytest.mark.asyncio
+    async def test_due_after_filter(self, mock_canvas_api):
+        """due_after filters out assignments before the date."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", due_after="2026-04-18")
+
+        # EDA Notebook (Apr 20) and Final Report (Apr 28) pass, Midterm (Apr 15) excluded
+        # Draft Outline (no due date) excluded
+        assert "EDA Notebook" in result
+        assert "Final Report" in result
+        assert "Midterm Quiz" not in result
+        assert "Draft Outline" not in result
+
+    @pytest.mark.asyncio
+    async def test_due_before_filter(self, mock_canvas_api):
+        """due_before filters out assignments after the date."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", due_before="2026-04-21")
+
+        # EDA Notebook (Apr 20) and Midterm (Apr 15) pass, Final Report (Apr 28) excluded
+        assert "EDA Notebook" in result
+        assert "Midterm Quiz" in result
+        assert "Final Report" not in result
+        assert "Draft Outline" not in result
+
+    @pytest.mark.asyncio
+    async def test_date_range_filter(self, mock_canvas_api):
+        """Combined due_after and due_before narrows to a date window."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments(
+            "badm_350_120251",
+            due_after="2026-04-18",
+            due_before="2026-04-25",
+        )
+
+        # Only EDA Notebook (Apr 20) falls in the window
+        assert "EDA Notebook" in result
+        assert "Final Report" not in result
+        assert "Midterm Quiz" not in result
+
+    @pytest.mark.asyncio
+    async def test_published_only_filter(self, mock_canvas_api):
+        """published_only=True excludes unpublished assignments."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", published_only=True)
+
+        assert "EDA Notebook" in result
+        assert "Final Report" in result
+        assert "Midterm Quiz" in result
+        assert "Draft Outline" not in result  # unpublished
+
+    @pytest.mark.asyncio
+    async def test_combined_date_and_published_filters(self, mock_canvas_api):
+        """Both date and published filters applied together."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments(
+            "badm_350_120251",
+            published_only=True,
+            due_after="2026-04-18",
+        )
+
+        # EDA Notebook (published, Apr 20) and Final Report (published, Apr 28) pass
+        # Draft Outline (unpublished) and Midterm (before Apr 18) excluded
+        assert "EDA Notebook" in result
+        assert "Final Report" in result
+        assert "Midterm Quiz" not in result
+        assert "Draft Outline" not in result
+
+    @pytest.mark.asyncio
+    async def test_no_due_date_excluded_by_date_filter(self, mock_canvas_api):
+        """Assignments with due_at=None are excluded when date filtering is active."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", due_after="2026-01-01")
+
+        # Draft Outline has no due date — should be excluded
+        assert "Draft Outline" not in result
+        # Others with dates should be included
+        assert "EDA Notebook" in result
+
+    @pytest.mark.asyncio
+    async def test_invalid_due_after_returns_error(self, mock_canvas_api):
+        """Invalid date string for due_after returns a clear error."""
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", due_after="not-a-date")
+
+        assert "Invalid date format" in result
+        assert "due_after" in result
+        mock_canvas_api['fetch_all_paginated_results'].assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_due_before_returns_error(self, mock_canvas_api):
+        """Invalid date string for due_before returns a clear error."""
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", due_before="yesterday")
+
+        assert "Invalid date format" in result
+        assert "due_before" in result
+        mock_canvas_api['fetch_all_paginated_results'].assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_all_filtered_out_returns_message(self, mock_canvas_api):
+        """When all assignments are filtered out, returns a descriptive message."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments(
+            "badm_350_120251",
+            due_after="2030-01-01",  # Far future — nothing matches
+        )
+
+        assert "No assignments found matching filters" in result
+
+    @pytest.mark.asyncio
+    async def test_no_filters_returns_all(self, mock_canvas_api):
+        """No filters specified returns all assignments."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251")
+
+        assert "EDA Notebook" in result
+        assert "Final Report" in result
+        assert "Draft Outline" in result
+        assert "Midterm Quiz" in result
+
+    # --- Unit 3: include_description payload trimming ---
+
+    @pytest.mark.asyncio
+    async def test_include_description_true_default(self, mock_canvas_api):
+        """Default include_description=true includes description and rubric."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251")
+
+        assert "Description:" in result
+        assert "Explore the dataset" in result
+        assert "Rubric:" in result
+
+    @pytest.mark.asyncio
+    async def test_include_description_false_strips_fields(self, mock_canvas_api):
+        """include_description=false strips description, rubric, and rubric_settings."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", include_description=False)
+
+        assert "Description:" not in result
+        assert "Rubric:" not in result
+        assert "Rubric Settings:" not in result
+        # Other fields still present
+        assert "EDA Notebook" in result
+        assert "ID: 101" in result
+
+    @pytest.mark.asyncio
+    async def test_include_description_false_shorter_response(self, mock_canvas_api):
+        """include_description=false produces a shorter response."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+
+        list_assignments = get_tool_function('list_assignments')
+        result_with = await list_assignments("badm_350_120251", include_description=True)
+
+        # Reset mock for second call
+        mock_canvas_api['fetch_all_paginated_results'].return_value = MOCK_ASSIGNMENTS
+        mock_canvas_api['get_course_id'].return_value = "60366"
+        mock_canvas_api['get_course_code'].return_value = "badm_350_120251"
+
+        result_without = await list_assignments("badm_350_120251", include_description=False)
+
+        assert len(result_without) < len(result_with)
+
+    @pytest.mark.asyncio
+    async def test_include_description_true_no_description(self, mock_canvas_api):
+        """include_description=true with empty description produces no Description: line."""
+        # Use only the Midterm Quiz which has description=""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = [MOCK_ASSIGNMENTS[3]]
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251")
+
+        assert "Midterm Quiz" in result
+        assert "Description:" not in result  # Empty description should not appear
+
+    # --- Error handling ---
+
+    @pytest.mark.asyncio
+    async def test_api_error_passthrough(self, mock_canvas_api):
+        """API errors are returned to the caller."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = {"error": "Rate limited"}
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251")
+
+        assert "Error fetching assignments" in result
+        assert "Rate limited" in result
+
+    @pytest.mark.asyncio
+    async def test_page_api_error_passthrough(self, mock_canvas_api):
+        """API errors when using page param are returned to the caller."""
+        mock_canvas_api['make_canvas_request'].return_value = {"error": "Not found"}
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251", page=1)
+
+        assert "Error fetching assignments" in result
+        assert "Not found" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_course_no_assignments(self, mock_canvas_api):
+        """Empty assignment list returns appropriate message."""
+        mock_canvas_api['fetch_all_paginated_results'].return_value = []
+
+        list_assignments = get_tool_function('list_assignments')
+        result = await list_assignments("badm_350_120251")
+
+        assert "No assignments found" in result
+
+
 class TestCreateAssignment:
     """Tests for create_assignment tool."""
 

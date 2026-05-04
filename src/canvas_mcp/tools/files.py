@@ -281,6 +281,110 @@ def register_file_tools(mcp: FastMCP):
 
     @mcp.tool()
     @validate_params
+    async def download_submission_attachment(
+        course_identifier: str | int,
+        assignment_id: str | int,
+        user_id: str | int,
+        attachment_id: str | int,
+        save_directory: str | None = None,
+    ) -> str:
+        """Download a file attachment from a student submission.
+
+        Submission attachments (uploaded files like PDFs, notebooks, images)
+        can't be downloaded via download_course_file — they live in a
+        separate partition. Use list_submissions to find attachment IDs.
+
+        Args:
+            course_identifier: The Canvas course code or ID
+            assignment_id: The assignment ID
+            user_id: The student's user ID
+            attachment_id: The attachment file ID (from list_submissions)
+            save_directory: Local directory to save the file. Defaults to the
+                           system temp directory. The directory must already exist.
+
+        Returns:
+            Success message with local file path, or error message.
+
+        Example usage:
+            1. Find attachment IDs:
+               list_submissions("847", 22027)
+               → Shows attachments with IDs for online_upload submissions
+
+            2. Download a specific attachment:
+               download_submission_attachment("847", 22027, 1044, 137541)
+               → "Downloaded: notebook.ipynb | Path: /tmp/notebook.ipynb"
+        """
+        course_id = await get_course_id(course_identifier)
+
+        # Fetch the submission to get the attachment URL with verifier token
+        response = await make_canvas_request(
+            "get",
+            f"/courses/{course_id}/assignments/{assignment_id}/submissions/{user_id}"
+        )
+
+        if isinstance(response, dict) and "error" in response:
+            return f"Error fetching submission: {response['error']}"
+
+        attachments = response.get("attachments", [])
+        if not attachments:
+            return "No attachments found on this submission."
+
+        # Find the matching attachment
+        target_id = int(attachment_id)
+        attachment = None
+        for att in attachments:
+            if att.get("id") == target_id:
+                attachment = att
+                break
+
+        if not attachment:
+            available = ", ".join(str(a.get("id")) for a in attachments)
+            return f"Attachment {attachment_id} not found. Available IDs: {available}"
+
+        download_url = attachment.get("url")
+        if not download_url:
+            return "Error: No download URL available for this attachment."
+
+        raw_filename = attachment.get("display_name") or attachment.get("filename", f"attachment_{attachment_id}")
+        filename = sanitize_filename(raw_filename)
+        content_type = attachment.get("content-type", "unknown")
+
+        # Determine save path
+        save_dir = save_directory or tempfile.gettempdir()
+        if not os.path.isdir(save_dir):
+            return f"Error: Directory does not exist: {save_dir}"
+
+        save_path = os.path.join(save_dir, filename)
+
+        # Download using streaming (same pattern as download_course_file)
+        client = _get_http_client()
+        try:
+            total_bytes = 0
+            async with client.stream("GET", download_url, follow_redirects=True) as dl_response:
+                dl_response.raise_for_status()
+
+                with open(save_path, 'wb') as f:
+                    async for chunk in dl_response.aiter_bytes(chunk_size=8192):
+                        f.write(chunk)
+                        total_bytes += len(chunk)
+
+            size_str = format_file_size(total_bytes)
+            course_display = await get_course_code(course_id) or course_identifier
+
+            result = f"Downloaded: {filename}\n"
+            result += f"  Path: {save_path}\n"
+            result += f"  Size: {size_str}\n"
+            result += f"  Type: {content_type}\n"
+            result += f"  Course: {course_display}\n"
+            result += f"  Student: {user_id}\n"
+            result += f"  Assignment: {assignment_id}\n"
+            return result
+
+        except Exception as e:
+            return f"Error downloading attachment: {str(e)}"
+
+    @mcp.tool()
+    @validate_params
     async def list_course_files(
         course_identifier: str | int,
         search_term: str | None = None,

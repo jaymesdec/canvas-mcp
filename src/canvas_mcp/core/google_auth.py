@@ -16,8 +16,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from .logging import log_error, log_info
 
 SCOPES = [
-    "https://www.googleapis.com/auth/documents.readonly",
+    "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/presentations.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
 ]
 
 TOKEN_DIR = Path.home() / ".canvas-mcp"

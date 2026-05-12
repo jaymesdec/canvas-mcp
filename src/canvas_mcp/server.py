@@ -249,11 +249,26 @@ def main() -> None:
     try:
         # Run the server with the selected transport
         if config.mcp_transport == "http":
+            import uvicorn
+            from .core.request_auth import BearerAuthMiddleware
+
             log_info(
                 f"Listening on http://{config.mcp_bind_host}:{config.mcp_bind_port} "
                 "(Streamable HTTP transport)"
             )
-            mcp.run(transport="streamable-http")
+            # Build the Starlette ASGI app and wrap it with our bearer-token
+            # middleware before handing it to uvicorn. We bypass mcp.run() here
+            # so we can attach middleware to the same app instance that serves
+            # requests (calling mcp.run with a transport rebuilds the app
+            # internally and would lose any middleware added afterwards).
+            app = mcp.streamable_http_app()
+            app.add_middleware(BearerAuthMiddleware)
+            uvicorn.run(
+                app,
+                host=config.mcp_bind_host,
+                port=config.mcp_bind_port,
+                log_level=config.log_level.lower(),
+            )
         else:
             mcp.run()
     except KeyboardInterrupt:

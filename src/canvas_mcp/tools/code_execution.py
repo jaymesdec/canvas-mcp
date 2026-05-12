@@ -30,20 +30,36 @@ _SAFE_ENV_KEYS = frozenset({
 })
 
 
+def _resolve_canvas_token(config: Any) -> str:
+    """Pick the Canvas API token for the in-flight request.
+
+    Resolves the per-request bearer (HTTP mode) first, then falls back to the
+    static CANVAS_API_TOKEN env var (stdio mode). This must be called inside
+    the request's ContextVar scope — before any subprocess or container is
+    spawned, since the child runs in its own process and won't see our
+    ContextVars.
+    """
+    from ..core.request_auth import get_request_token
+
+    return get_request_token() or config.canvas_api_token
+
+
 def _build_safe_env(config: Any) -> dict[str, str]:
     """Build a filtered environment dict for subprocess execution.
 
     Only passes through keys in _SAFE_ENV_KEYS, plus explicitly adds
-    CANVAS_API_URL and CANVAS_API_TOKEN from config.
+    CANVAS_API_URL and the request's Canvas API token (per-request in HTTP
+    mode, static env var in stdio mode).
     """
     env: dict[str, str] = {}
     for key in _SAFE_ENV_KEYS:
         val = os.environ.get(key)
         if val is not None:
             env[key] = val
-    # Explicitly add Canvas credentials from config
+    # Explicitly add Canvas credentials. Token is resolved per-request so
+    # multi-tenant HTTP-mode sandboxes act as the right teacher.
     env["CANVAS_API_URL"] = config.canvas_api_url
-    env["CANVAS_API_TOKEN"] = config.canvas_api_token
+    env["CANVAS_API_TOKEN"] = _resolve_canvas_token(config)
     return env
 
 
@@ -450,7 +466,7 @@ def register_code_execution_tools(mcp: FastMCP) -> None:
                     "-e",
                     f"CANVAS_API_URL={config.canvas_api_url}",
                     "-e",
-                    f"CANVAS_API_TOKEN={config.canvas_api_token}",
+                    f"CANVAS_API_TOKEN={_resolve_canvas_token(config)}",
                 ])
                 if node_options_container:
                     cmd.extend(["-e", f"NODE_OPTIONS={node_options_container}"])

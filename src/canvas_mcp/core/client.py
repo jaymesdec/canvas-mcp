@@ -75,7 +75,12 @@ def _should_anonymize_endpoint(endpoint: str) -> bool:
 
 
 def _get_http_client() -> httpx.AsyncClient:
-    """Get or create the HTTP client with current configuration."""
+    """Get or create the shared HTTP client.
+
+    The Authorization header is NOT baked in here — it is supplied per-request
+    via _auth_header() so multi-tenant HTTP-mode requests can each use their
+    own bearer token. Connection pooling is preserved across tenants.
+    """
     global http_client
     if http_client is None:
         from .. import __version__
@@ -83,12 +88,28 @@ def _get_http_client() -> httpx.AsyncClient:
         config = get_config()
         http_client = httpx.AsyncClient(
             headers={
-                'Authorization': f'Bearer {config.api_token}',
                 'User-Agent': f'canvas-mcp/{__version__} (https://github.com/vishalsachdev/canvas-mcp)'
             },
             timeout=config.api_timeout
         )
     return http_client
+
+
+def _auth_header() -> dict[str, str]:
+    """Build the Authorization header for the current Canvas API call.
+
+    Resolves the token from the per-request ContextVar (HTTP mode) first,
+    then falls back to the static CANVAS_API_TOKEN env var (stdio mode).
+    Returns an empty dict when no token is available; callers should treat
+    that as an unauthenticated request and short-circuit with an error.
+    """
+    from .config import get_config
+    from .request_auth import get_request_token
+
+    token = get_request_token() or get_config().canvas_api_token
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def cleanup_http_client() -> None:
@@ -126,6 +147,20 @@ async def make_canvas_request(
     config = get_config()
     client = _get_http_client()
 
+    # Resolve the Canvas API token for this specific request. In HTTP mode this
+    # comes from the ContextVar populated by BearerAuthMiddleware; in stdio
+    # mode it falls back to the static CANVAS_API_TOKEN env var.
+    auth_headers = _auth_header()
+    if not auth_headers:
+        return {
+            "error": (
+                "No Canvas API token available for this request. "
+                "In stdio mode set CANVAS_API_TOKEN; in http mode the client "
+                "must send an Authorization: Bearer <token> header."
+            )
+        }
+    form_headers = {**auth_headers, "Content-Type": "application/x-www-form-urlencoded"}
+
     # Ensure the endpoint starts with a slash
     if not endpoint.startswith('/'):
         endpoint = f"/{endpoint}"
@@ -151,7 +186,7 @@ async def make_canvas_request(
                 log_debug(f"Making {method.upper()} request to {sanitize_url(url)}{retry_info}")
 
             if method.lower() == "get":
-                response = await client.get(url, params=params)
+                response = await client.get(url, params=params, headers=auth_headers)
             elif method.lower() == "post":
                 if use_form_data:
                     # Handle list of tuples separately to work around httpx async bug
@@ -161,12 +196,12 @@ async def make_canvas_request(
                         response = await client.post(
                             url,
                             content=encoded,
-                            headers={"Content-Type": "application/x-www-form-urlencoded"}
+                            headers=form_headers,
                         )
                     else:
-                        response = await client.post(url, data=data)
+                        response = await client.post(url, data=data, headers=auth_headers)
                 else:
-                    response = await client.post(url, json=data)
+                    response = await client.post(url, json=data, headers=auth_headers)
             elif method.lower() == "put":
                 if use_form_data:
                     # Handle list of tuples separately to work around httpx async bug
@@ -175,14 +210,14 @@ async def make_canvas_request(
                         response = await client.put(
                             url,
                             content=encoded,
-                            headers={"Content-Type": "application/x-www-form-urlencoded"}
+                            headers=form_headers,
                         )
                     else:
-                        response = await client.put(url, data=data)
+                        response = await client.put(url, data=data, headers=auth_headers)
                 else:
-                    response = await client.put(url, json=data)
+                    response = await client.put(url, json=data, headers=auth_headers)
             elif method.lower() == "delete":
-                response = await client.delete(url, params=params)
+                response = await client.delete(url, params=params, headers=auth_headers)
             else:
                 return {"error": f"Unsupported method: {method}"}
 

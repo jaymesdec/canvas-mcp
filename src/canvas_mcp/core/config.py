@@ -12,6 +12,7 @@ load_dotenv()
 _INVALID_INT_ENV_VARS: dict[str, str] = {}
 
 VALID_SANDBOX_MODES = frozenset({"auto", "local", "container"})
+VALID_MCP_TRANSPORTS = frozenset({"stdio", "http"})
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -39,6 +40,14 @@ class Config:
         # Required configuration
         self.canvas_api_token = os.getenv("CANVAS_API_TOKEN", "")
         self.canvas_api_url = os.getenv("CANVAS_API_URL", "")
+
+        # Transport configuration
+        # 'stdio' = default, used by Claude Desktop (single-tenant, static token).
+        # 'http'  = Streamable HTTP, used by Anthropic Managed Agents (multi-tenant,
+        #          per-request bearer token in the Authorization header).
+        self.mcp_transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
+        self.mcp_bind_host = os.getenv("MCP_BIND_HOST", "0.0.0.0")
+        self.mcp_bind_port = _int_env("MCP_BIND_PORT", 8000)
 
         # Optional configuration with defaults
         self.mcp_server_name = os.getenv("MCP_SERVER_NAME", "canvas-api")
@@ -114,20 +123,29 @@ def validate_config() -> bool:
     unimplemented_env_vars = {
         "TOKEN_STORAGE_BACKEND": "token storage backend selection is not enforced yet",
         "TOKEN_ENVELOPE_KEY_SOURCE": "token envelope encryption is not enforced yet",
-        "MCP_CLIENT_AUTH_MODE": "MCP client authentication is not implemented for stdio transport",
-        "MCP_CLIENT_API_KEY_REQUIRED": "MCP client authentication is not implemented for stdio transport",
-        "MCP_CLIENT_CERT_AUTHORITY": "MCP client authentication is not implemented for stdio transport",
+        "MCP_CLIENT_AUTH_MODE": "MCP client authentication mode is hard-coded to bearer-in-http-header",
+        "MCP_CLIENT_API_KEY_REQUIRED": "MCP client authentication is hard-coded to bearer-in-http-header",
+        "MCP_CLIENT_CERT_AUTHORITY": "mTLS for MCP clients is not implemented",
         "LOG_ROTATION_DAYS": "log rotation is not enforced yet",
         "LOG_RETENTION_DAYS": "log retention is not enforced yet",
         "LOG_DESTINATION": "log destinations are not configurable yet",
         "SIEM_FORWARDING_ENABLED": "SIEM forwarding is not implemented yet",
-        "MCP_BIND_HOST": "MCP uses stdio transport and does not bind network sockets",
-        "MCP_BIND_PORT": "MCP uses stdio transport and does not bind network sockets",
         "FIREWALL_HINT": "firewall hints are documentation-only",
     }
 
-    if not config.canvas_api_token:
-        log_error("CANVAS_API_TOKEN environment variable is required")
+    if config.mcp_transport not in VALID_MCP_TRANSPORTS:
+        log_error(
+            f"MCP_TRANSPORT must be one of {sorted(VALID_MCP_TRANSPORTS)} "
+            f"(got '{config.mcp_transport}')"
+        )
+        return False
+
+    # In stdio mode, a static CANVAS_API_TOKEN is required at startup — there
+    # is no other way for the server to authenticate against Canvas. In http
+    # mode, tokens arrive per request in the Authorization header, so the
+    # startup token is optional (and typically absent).
+    if config.mcp_transport == "stdio" and not config.canvas_api_token:
+        log_error("CANVAS_API_TOKEN environment variable is required for stdio transport")
         log_error("Please set CANVAS_API_TOKEN in your .env file")
         return False
 

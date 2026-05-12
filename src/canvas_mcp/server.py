@@ -44,9 +44,17 @@ from .tools import (
 
 
 def create_server() -> FastMCP:
-    """Create and configure the Canvas MCP server."""
+    """Create and configure the Canvas MCP server.
+
+    In http transport mode we pass host/port to FastMCP so the streamable-HTTP
+    server binds correctly; in stdio mode those settings are ignored.
+    """
     config = get_config()
-    mcp = FastMCP(config.mcp_server_name)
+    mcp = FastMCP(
+        config.mcp_server_name,
+        host=config.mcp_bind_host,
+        port=config.mcp_bind_port,
+    )
     return mcp
 
 
@@ -203,29 +211,34 @@ def main() -> None:
 
     # Normal server startup
     log_info(f"Starting Canvas MCP server with API URL: {config.canvas_api_url}")
+    log_info(f"Transport: {config.mcp_transport}")
     if config.institution_name:
         log_info(f"Institution: {config.institution_name}")
 
-    # Validate token on startup (warn but don't block)
-    try:
-        ok, message = asyncio.run(_validate_token())
-        if ok:
-            log_info(f"✓ {message}")
-        else:
+    # Validate token on startup (warn but don't block) — stdio mode only.
+    # In http mode tokens arrive per-request, so there is no static token to
+    # validate at startup; the server may legitimately have no Canvas
+    # credential at all when it boots.
+    if config.mcp_transport == "stdio":
+        try:
+            ok, message = asyncio.run(_validate_token())
+            if ok:
+                log_info(f"✓ {message}")
+            else:
+                log_warning(
+                    f"Token validation failed: {message}. "
+                    "Check your CANVAS_API_TOKEN. Server will start anyway."
+                )
+        except Exception:
             log_warning(
-                f"Token validation failed: {message}. "
-                "Check your CANVAS_API_TOKEN. Server will start anyway."
+                "Could not validate token on startup (network may be unavailable). "
+                "Server will start anyway."
             )
-    except Exception:
-        log_warning(
-            "Could not validate token on startup (network may be unavailable). "
-            "Server will start anyway."
-        )
-    finally:
-        # Reset the HTTP client — asyncio.run() created it on a temporary event loop
-        # that is now closed. It must be recreated on the MCP server's event loop.
-        from .core import client as _client_mod
-        _client_mod.http_client = None
+        finally:
+            # Reset the HTTP client — asyncio.run() created it on a temporary event loop
+            # that is now closed. It must be recreated on the MCP server's event loop.
+            from .core import client as _client_mod
+            _client_mod.http_client = None
 
     log_info("Use Ctrl+C to stop the server")
 
@@ -234,8 +247,15 @@ def main() -> None:
     register_all_tools(mcp)
 
     try:
-        # Run the server
-        mcp.run()
+        # Run the server with the selected transport
+        if config.mcp_transport == "http":
+            log_info(
+                f"Listening on http://{config.mcp_bind_host}:{config.mcp_bind_port} "
+                "(Streamable HTTP transport)"
+            )
+            mcp.run(transport="streamable-http")
+        else:
+            mcp.run()
     except KeyboardInterrupt:
         log_info("\nShutting down server...")
     except Exception as e:

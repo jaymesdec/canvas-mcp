@@ -1,53 +1,35 @@
-# Fly.io deploy config for Canvas MCP in HTTP (multi-tenant) mode.
+# fly.toml app configuration file generated for canvas-mcp-franklin on 2026-05-12T17:39:15Z
 #
-# First-time setup:
-#   1. brew install flyctl  (or curl -L https://fly.io/install.sh | sh)
-#   2. fly auth login
-#   3. fly launch --no-deploy --copy-config   # accepts this file, creates the app
-#      - When prompted, pick an app name (e.g. canvas-mcp-franklin) and edit
-#        the `app = "..."` line below to match it, or let fly launch rewrite it.
-#   4. fly secrets set CANVAS_API_URL=https://franklinjc.instructure.com/api/v1
-#   5. fly deploy
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# Update flow:
-#   git push (or local edit) → fly deploy   # rebuilds image and rolls out
-#
-# Notes:
-#   - CANVAS_API_TOKEN is intentionally NOT set as an env var or secret here.
-#     In HTTP mode the server reads tokens per-request from the Authorization
-#     header (sent by Anthropic's MCP proxy out of a vault). The container
-#     never holds a long-lived Canvas credential.
-#   - auto_stop_machines = "stop" + min_machines_running = 0 lets the machine
-#     scale to zero when idle. First request after idle has a cold-start
-#     (~1-2s). Fine for a chatbot; bump min_machines_running to 1 if not.
 
-app = "canvas-mcp-franklin"
-primary_region = "ord"  # Chicago. Change to "ewr" (NYC), "iad" (Virginia), etc.
+app = 'canvas-mcp-franklin'
+primary_region = 'ord'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  MCP_TRANSPORT = "http"
-  MCP_BIND_HOST = "0.0.0.0"
-  MCP_BIND_PORT = "8000"
-  # Non-sensitive defaults; override via `fly secrets set` or here as needed.
-  ENABLE_DATA_ANONYMIZATION = "true"
-  LOG_REDACT_PII = "true"
+  ENABLE_DATA_ANONYMIZATION = 'true'
+  LOG_REDACT_PII = 'true'
+  MCP_BIND_HOST = '0.0.0.0'
+  MCP_BIND_PORT = '8000'
+  MCP_TRANSPORT = 'http'
 
 [http_service]
-  internal_port = 8000
+  internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
   [http_service.concurrency]
-    type = "requests"
+    type = 'requests'
     hard_limit = 200
     soft_limit = 100
 
 [[vm]]
-  memory = "512mb"
-  cpu_kind = "shared"
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256

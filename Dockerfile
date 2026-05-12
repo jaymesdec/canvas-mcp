@@ -30,9 +30,15 @@ ENV MCP_SERVER_NAME="canvas-mcp" \
 # Switch to non-root user
 USER mcp
 
+# In stdio mode this is a no-op (no port listening). In http mode (set via
+# MCP_TRANSPORT=http at runtime, e.g. via fly.toml [env]) the server binds to
+# MCP_BIND_PORT (default 8000) on 0.0.0.0.
+EXPOSE 8000
+
 # Health check to verify installation
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD python -c "import canvas_mcp; print('OK')" || exit 1
 
-# Run the MCP server
+# Run the MCP server. Default behavior is stdio (back-compat); set
+# MCP_TRANSPORT=http in the runtime env to switch to streamable-HTTP mode.
 CMD ["canvas-mcp-server"]

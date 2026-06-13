@@ -631,3 +631,65 @@ def register_module_tools(mcp: FastMCP):
         result += "\n  Note: The underlying content was NOT deleted, only unlinked from this module.\n"
 
         return result
+
+    @mcp.tool()
+    @validate_params
+    async def list_module_items(course_identifier: str | int,
+                               module_id: str | int,
+                               include_content_details: bool = True) -> str:
+        """List items within a specific module, including pages.
+
+        Args:
+            course_identifier: The Canvas course code (e.g., badm_554_120251_246794) or ID
+            module_id: The module ID
+            include_content_details: Whether to include additional details about content items
+        """
+        course_id = await get_course_id(course_identifier)
+
+        params = {"per_page": 100}
+        if include_content_details:
+            params["include[]"] = ["content_details"]
+
+        items = await fetch_all_paginated_results(
+            f"/courses/{course_id}/modules/{module_id}/items", params
+        )
+
+        if isinstance(items, dict) and "error" in items:
+            return f"Error fetching module items: {items['error']}"
+
+        if not items:
+            return f"No items found in module {module_id}."
+
+        # Get module details for context
+        module_response = await make_canvas_request(
+            "get", f"/courses/{course_id}/modules/{module_id}"
+        )
+
+        module_name = "Unknown Module"
+        if "error" not in module_response:
+            module_name = module_response.get("name", "Unknown Module")
+
+        course_display = await get_course_code(course_id) or course_identifier
+        result = f"Module Items for '{module_name}' in Course {course_display}:\n\n"
+
+        for item in items:
+            item_id = item.get("id")
+            title = item.get("title", "Untitled")
+            item_type = item.get("type", "Unknown")
+            content_id = item.get("content_id")
+            url = item.get("url", "")
+            external_url = item.get("external_url", "")
+            published = item.get("published", False)
+
+            result += f"Item: {title}\n"
+            result += f"Type: {item_type}\n"
+            result += f"ID: {item_id}\n"
+            if content_id:
+                result += f"Content ID: {content_id}\n"
+            if url:
+                result += f"URL: {url}\n"
+            if external_url:
+                result += f"External URL: {external_url}\n"
+            result += f"Published: {'Yes' if published else 'No'}\n\n"
+
+        return result

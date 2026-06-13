@@ -2,8 +2,9 @@
 
 from mcp.server.fastmcp import FastMCP
 
+from ..core.anonymization import anonymize_response_data
 from ..core.cache import get_course_code, get_course_id
-from ..core.client import make_canvas_request
+from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.logging import log_info
 from ..core.validation import validate_params
 
@@ -172,5 +173,68 @@ def register_group_tools(mcp: FastMCP) -> None:
         result += f"Group ID: {group_id}\n"
         result += f"Name: {group_name}\n"
         return result
+
+    @mcp.tool()
+    @validate_params
+    async def list_groups(course_identifier: str | int) -> str:
+        """List all groups and their members for a specific course.
+
+        Args:
+            course_identifier: The Canvas course code (e.g., badm_554_120251_246794) or ID
+        """
+        course_id = await get_course_id(course_identifier)
+
+        # Get all groups in the course
+        groups = await fetch_all_paginated_results(
+            f"/courses/{course_id}/groups", {"per_page": 100}
+        )
+
+        if isinstance(groups, dict) and "error" in groups:
+            return f"Error fetching groups: {groups['error']}"
+
+        if not groups:
+            return f"No groups found for course {course_identifier}."
+
+        # Format the output
+        course_display = await get_course_code(course_id) or course_identifier
+        output = f"Groups for Course {course_display}:\n\n"
+
+        for group in groups:
+            group_id = group.get("id")
+            group_name = group.get("name", "Unnamed group")
+            group_category = group.get("group_category_id", "Uncategorized")
+            member_count = group.get("members_count", 0)
+
+            output += f"Group: {group_name}\n"
+            output += f"ID: {group_id}\n"
+            output += f"Category ID: {group_category}\n"
+            output += f"Member Count: {member_count}\n"
+
+            # Get members for this group
+            members = await fetch_all_paginated_results(
+                f"/groups/{group_id}/users", {"per_page": 100}
+            )
+
+            if isinstance(members, dict) and "error" in members:
+                output += f"Error fetching members: {members['error']}\n"
+            elif not members:
+                output += "No members in this group.\n"
+            else:
+                # Anonymize member data to protect student privacy
+                try:
+                    members = anonymize_response_data(members, data_type="users")
+                except Exception as e:
+                    print(f"Warning: Failed to anonymize group member data: {str(e)}")
+                    # Continue with original data for functionality
+                output += "Members:\n"
+                for member in members:
+                    member_id = member.get("id")
+                    member_name = member.get("name", "Unnamed user")
+                    member_email = member.get("email", "No email")
+                    output += f"  - {member_name} (ID: {member_id}, Email: {member_email})\n"
+
+            output += "\n"
+
+        return output
 
     log_info("Canvas group tools registered successfully!")

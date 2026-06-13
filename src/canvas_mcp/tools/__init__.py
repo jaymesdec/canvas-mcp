@@ -2,6 +2,7 @@
 
 from .accessibility import register_accessibility_tools
 from .accounts import register_account_tools
+from .analytics import register_analytics_tools
 from .assignments import register_assignment_tools
 from .code_execution import register_code_execution_tools
 from .courses import register_course_tools
@@ -14,10 +15,10 @@ from .gradebook import register_gradebook_tools
 from .groups import register_group_tools
 from .messaging import register_messaging_tools
 from .modules import register_module_tools
-from .other_tools import register_other_tools
 from .pages import register_page_tools
 from .peer_review_comments import register_peer_review_comment_tools
 from .peer_reviews import register_peer_review_tools
+from .privacy import register_privacy_tools
 from .quizzes import register_quiz_tools
 from .rubrics import register_rubric_tools
 from .student_tools import register_student_tools
@@ -25,6 +26,7 @@ from .transdisciplinary import register_transdisciplinary_tools
 
 __all__ = [
     'register_account_tools',
+    'register_analytics_tools',
     'register_course_tools',
     'register_assignment_tools',
     'register_discussion_tools',
@@ -33,7 +35,7 @@ __all__ = [
     'register_gradebook_tools',
     'register_group_tools',
     'register_module_tools',
-    'register_other_tools',
+    'register_privacy_tools',
     'register_rubric_tools',
     'register_peer_review_tools',
     'register_peer_review_comment_tools',

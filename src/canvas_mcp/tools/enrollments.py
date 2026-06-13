@@ -2,8 +2,9 @@
 
 from mcp.server.fastmcp import FastMCP
 
+from ..core.anonymization import anonymize_response_data
 from ..core.cache import get_course_code, get_course_id
-from ..core.client import make_canvas_request
+from ..core.client import fetch_all_paginated_results, make_canvas_request
 from ..core.logging import log_info
 from ..core.validation import validate_params
 
@@ -131,5 +132,53 @@ def register_enrollment_tools(mcp: FastMCP) -> None:
         result += f"Enrollment ID: {enrollment_id}\n"
         result += "Status: deactivated (can be reactivated later)\n"
         return result
+
+    @mcp.tool()
+    @validate_params
+    async def list_users(course_identifier: str) -> str:
+        """List users enrolled in a specific course.
+
+        Args:
+            course_identifier: The Canvas course code (e.g., badm_554_120251_246794) or ID
+        """
+        course_id = await get_course_id(course_identifier)
+
+        params = {
+            "include[]": ["enrollments", "email"],
+            "per_page": 100
+        }
+
+        users = await fetch_all_paginated_results(f"/courses/{course_id}/users", params)
+
+        if isinstance(users, dict) and "error" in users:
+            return f"Error fetching users: {users['error']}"
+
+        if not users:
+            return f"No users found for course {course_identifier}."
+
+        # Anonymize user data to protect student privacy
+        try:
+            users = anonymize_response_data(users, data_type="users")
+        except Exception as e:
+            print(f"Warning: Failed to anonymize user data: {str(e)}")
+            # Continue with original data for functionality
+
+        users_info = []
+        for user in users:
+            user_id = user.get("id")
+            name = user.get("name", "Unknown")
+            email = user.get("email", "No email")
+
+            # Get enrollment info
+            enrollments = user.get("enrollments", [])
+            roles = [enrollment.get("role", "Student") for enrollment in enrollments]
+            role_list = ", ".join(set(roles)) if roles else "Student"
+
+            users_info.append(
+                f"ID: {user_id}\nName: {name}\nEmail: {email}\nRoles: {role_list}\n"
+            )
+
+        course_display = await get_course_code(course_id) or course_identifier
+        return f"Users in Course {course_display}:\n\n" + "\n".join(users_info)
 
     log_info("Canvas enrollment tools registered successfully!")

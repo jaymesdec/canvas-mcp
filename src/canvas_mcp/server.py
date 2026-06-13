@@ -20,6 +20,7 @@ from .resources import register_resources_and_prompts
 from .tools import (
     register_accessibility_tools,
     register_account_tools,
+    register_analytics_tools,
     register_assignment_tools,
     register_code_execution_tools,
     register_course_tools,
@@ -27,19 +28,19 @@ from .tools import (
     register_discussion_tools,
     register_enrollment_tools,
     register_file_tools,
+    register_google_tools,
     register_gradebook_tools,
     register_group_tools,
     register_messaging_tools,
     register_module_tools,
-    register_other_tools,
     register_page_tools,
     register_peer_review_comment_tools,
     register_peer_review_tools,
+    register_privacy_tools,
     register_quiz_tools,
     register_rubric_tools,
     register_student_tools,
     register_transdisciplinary_tools,
-    register_google_tools,
 )
 
 
@@ -64,7 +65,6 @@ def register_all_tools(mcp: FastMCP) -> None:
     register_gradebook_tools(mcp)
     register_group_tools(mcp)
     register_module_tools(mcp)
-    register_other_tools(mcp)
     register_page_tools(mcp)
     register_quiz_tools(mcp)
     register_rubric_tools(mcp)
@@ -75,6 +75,8 @@ def register_all_tools(mcp: FastMCP) -> None:
     register_accessibility_tools(mcp)
     register_discovery_tools(mcp)
     register_code_execution_tools(mcp)
+    register_analytics_tools(mcp)
+    register_privacy_tools(mcp)
     register_transdisciplinary_tools(mcp)
     register_google_tools(mcp)
 

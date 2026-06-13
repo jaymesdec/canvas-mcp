@@ -5,7 +5,7 @@ from mcp.server.fastmcp import FastMCP
 from ..core.anonymization import anonymize_response_data
 from ..core.cache import get_course_code, get_course_id
 from ..core.client import fetch_all_paginated_results, make_canvas_request
-from ..core.logging import log_info
+from ..core.logging import log_info, log_warning
 from ..core.validation import validate_params
 
 
@@ -224,7 +224,10 @@ def register_group_tools(mcp: FastMCP) -> None:
                 try:
                     members = anonymize_response_data(members, data_type="users")
                 except Exception as e:
-                    print(f"Warning: Failed to anonymize group member data: {str(e)}")
+                    log_warning(
+                        "Failed to anonymize group member data",
+                        error_type=type(e).__name__,
+                    )
                     # Continue with original data for functionality
                 output += "Members:\n"
                 for member in members:

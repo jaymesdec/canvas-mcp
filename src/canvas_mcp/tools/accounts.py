@@ -5,7 +5,6 @@ enabling queries across all courses and users in an account rather than
 just the authenticated user's enrollments.
 """
 
-from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -95,9 +94,9 @@ def register_account_tools(mcp: FastMCP):
     @validate_params
     async def list_account_courses(
         account_id: int,
-        term_id: Optional[int] = None,
-        state: Optional[str] = None,
-        search_term: Optional[str] = None,
+        term_id: int | None = None,
+        state: str | None = None,
+        search_term: str | None = None,
         include_teachers: bool = False,
         include_total_students: bool = False,
         limit: int = 100,
@@ -222,8 +221,8 @@ def register_account_tools(mcp: FastMCP):
     @validate_params
     async def list_account_users(
         account_id: int,
-        search_term: Optional[str] = None,
-        enrollment_type: Optional[str] = None,
+        search_term: str | None = None,
+        enrollment_type: str | None = None,
         limit: int = 100
     ) -> str:
         """List all users in a Canvas account (requires admin access).
@@ -280,7 +279,7 @@ def register_account_tools(mcp: FastMCP):
     @validate_params
     async def get_account_analytics(
         account_id: int,
-        term_id: Optional[int] = None,
+        term_id: int | None = None,
         include_all_terms: bool = False
     ) -> str:
         """Get high-level analytics for a Canvas account.
@@ -378,7 +377,7 @@ def register_account_tools(mcp: FastMCP):
     async def search_account_courses(
         account_id: int,
         search_term: str,
-        term_id: Optional[int] = None,
+        term_id: int | None = None,
         include_concluded: bool = False,
         limit: int = 50,
         include_all_terms: bool = False
@@ -430,7 +429,7 @@ def register_account_tools(mcp: FastMCP):
         if effective_term_id:
             # Always include the requested term
             allowed_terms = {int(effective_term_id)}
-            
+
             # If falling back to config default (and no explicit term requested),
             # also include the system Default Term (1) which holds ongoing content
             if term_id is None:

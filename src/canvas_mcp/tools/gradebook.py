@@ -43,7 +43,7 @@ def register_gradebook_tools(mcp: FastMCP) -> None:
             return f"Error fetching gradebook: {enrollments['error']}"
 
         if not enrollments:
-            return f"No student enrollments found for this course."
+            return "No student enrollments found for this course."
 
         # Anonymize student data
         try:
@@ -114,7 +114,7 @@ def register_gradebook_tools(mcp: FastMCP) -> None:
             assignment_name = assignment.get("name", "Unknown")
 
         course_display = await get_course_code(course_id) or course_identifier
-        result = f"Grades posted successfully!\n\n"
+        result = "Grades posted successfully!\n\n"
         result += f"Course: {course_display}\n"
         result += f"Assignment: {assignment_name} (ID: {assignment_id})\n"
         result += "Status: Grades are now visible to students\n"
@@ -155,7 +155,7 @@ def register_gradebook_tools(mcp: FastMCP) -> None:
             assignment_name = assignment.get("name", "Unknown")
 
         course_display = await get_course_code(course_id) or course_identifier
-        result = f"Grades hidden successfully!\n\n"
+        result = "Grades hidden successfully!\n\n"
         result += f"Course: {course_display}\n"
         result += f"Assignment: {assignment_name} (ID: {assignment_id})\n"
         result += "Status: Grades are now hidden from students\n"

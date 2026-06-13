@@ -1159,7 +1159,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         # Build CSV header
         header = ["Rubric Name", "Criteria Name", "Criteria Description",
                   "Criteria Enable Range"]
-        for i in range(max_ratings):
+        for _ in range(max_ratings):
             header.extend(["Rating Name", "Rating Description", "Rating Points"])
 
         # Build CSV rows
@@ -1205,8 +1205,8 @@ def register_rubric_tools(mcp: FastMCP) -> None:
         csv_content = csv_buffer.getvalue()
 
         # Upload CSV via httpx multipart file upload
-        from ..core.config import get_config
         from ..core.client import _get_http_client
+        from ..core.config import get_config
 
         config = get_config()
         client = _get_http_client()
@@ -1245,7 +1245,7 @@ def register_rubric_tools(mcp: FastMCP) -> None:
                 result = f"Rubric created at account level (Account {account_id_str})!\n\n"
                 result += f"Title: {title}\n"
                 result += f"Import ID: {import_id}\n"
-                result += f"Status: succeeded\n"
+                result += "Status: succeeded\n"
                 result += f"Criteria: {len(parsed_criteria)}\n"
                 result += f"Errors: {error_count}\n"
                 if error_count > 0:

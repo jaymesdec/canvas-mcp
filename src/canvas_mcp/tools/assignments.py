@@ -591,7 +591,7 @@ def register_assignment_tools(mcp: FastMCP):
 
         result = f"Graded student {student_id}: {grade}"
         if comment:
-            result += f" (with comment)"
+            result += " (with comment)"
         return result
 
     @mcp.tool()

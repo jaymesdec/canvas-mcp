@@ -147,7 +147,7 @@ def register_student_tools(mcp: FastMCP):
             if not include_all_terms and config.default_term_id:
                 target_term = config.default_term_id
                 allowed_terms = {int(target_term), 1}  # Always include default term (1)
-                
+
                 courses = [
                      c for c in courses
                      if c.get("enrollment_term_id") and int(c.get("enrollment_term_id")) in allowed_terms
@@ -261,7 +261,7 @@ def register_student_tools(mcp: FastMCP):
         if not include_all_terms and config.default_term_id:
             target_term = config.default_term_id
             allowed_terms = {int(target_term), 1}  # Always include default term (1)
-            
+
             courses = [
                  c for c in courses
                  if c.get("enrollment_term_id") and int(c.get("enrollment_term_id")) in allowed_terms
@@ -380,7 +380,7 @@ def register_student_tools(mcp: FastMCP):
             if not include_all_terms and config.default_term_id:
                 target_term = config.default_term_id
                 allowed_terms = {int(target_term), 1}  # Always include default term (1)
-                
+
                 courses = [
                      c for c in courses
                      if c.get("enrollment_term_id") and int(c.get("enrollment_term_id")) in allowed_terms

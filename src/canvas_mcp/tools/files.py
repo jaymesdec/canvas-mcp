@@ -148,7 +148,6 @@ def register_file_tools(mcp: FastMCP):
 
         file_id = step2_response.get("id")
         file_name = step2_response.get("display_name") or step2_response.get("filename") or upload_filename
-        file_url = step2_response.get("url", "")
         file_folder_id = step2_response.get("folder_id")
 
         # If we got a success but no file ID, the file might need confirmation

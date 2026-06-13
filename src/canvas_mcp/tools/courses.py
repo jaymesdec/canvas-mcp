@@ -1,6 +1,5 @@
 """Course-related MCP tools for Canvas API."""
 
-from typing import Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 
@@ -25,7 +24,7 @@ def register_course_tools(mcp: FastMCP):
     async def list_courses(
         include_concluded: bool = False,
         include_all: bool = False,
-        term_id: Optional[int] = None,
+        term_id: int | None = None,
         include_all_terms: bool = False
     ) -> str:
         """List courses for the authenticated user.
@@ -288,15 +287,15 @@ def register_course_tools(mcp: FastMCP):
     @mcp.tool()
     @validate_params
     async def update_course(
-        course_identifier: Union[str, int],
-        name: Optional[str] = None,
-        course_code: Optional[str] = None,
-        syllabus_body: Optional[str] = None,
-        default_view: Optional[str] = None,
-        start_at: Optional[str] = None,
-        end_at: Optional[str] = None,
-        is_public: Optional[bool] = None,
-        license: Optional[str] = None,
+        course_identifier: str | int,
+        name: str | None = None,
+        course_code: str | None = None,
+        syllabus_body: str | None = None,
+        default_view: str | None = None,
+        start_at: str | None = None,
+        end_at: str | None = None,
+        is_public: bool | None = None,
+        license: str | None = None,
     ) -> str:
         """Update a course's settings, including syllabus content.
 

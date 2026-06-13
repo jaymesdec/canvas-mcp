@@ -38,7 +38,7 @@ def register_quiz_tools(mcp: FastMCP) -> None:
             return f"Error fetching quizzes: {quizzes['error']}"
 
         if not quizzes:
-            return f"No quizzes found for this course."
+            return "No quizzes found for this course."
 
         course_display = await get_course_code(course_id) or course_identifier
         result = f"Quizzes for Course {course_display}:\n\n"

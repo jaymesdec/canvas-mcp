@@ -4,6 +4,21 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from canvas_mcp.core.config import reset_config
+
+
+@pytest.fixture(autouse=True)
+def reset_config_between_tests():
+    """Discard the cached config before and after each test.
+
+    The config is a process-wide singleton read from environment variables.
+    Resetting it ensures tests that patch env vars (e.g. anonymization toggles)
+    get a fresh config instead of a stale one cached by an earlier test.
+    """
+    reset_config()
+    yield
+    reset_config()
+
 
 @pytest.fixture
 def mock_canvas_request():

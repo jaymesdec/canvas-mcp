@@ -108,6 +108,16 @@ def get_config() -> Config:
     return _config
 
 
+def reset_config() -> None:
+    """Discard the cached configuration so the next ``get_config()`` re-reads.
+
+    Primarily used by tests that patch environment variables, and by any code
+    that needs to pick up configuration changes at runtime.
+    """
+    global _config
+    _config = None
+
+
 def validate_config() -> bool:
     """Validate that required configuration is present."""
     config = get_config()
@@ -159,8 +169,3 @@ def validate_config() -> bool:
             log_warning(f"{env_name} is set but {note}.")
 
     return True
-
-
-# Legacy compatibility - these will be used by existing code
-API_BASE_URL = get_config().api_base_url
-API_TOKEN = get_config().api_token

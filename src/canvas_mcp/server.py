@@ -40,6 +40,7 @@ from .tools import (
     register_student_tools,
     register_transdisciplinary_tools,
     register_google_tools,
+    register_import_tools,
 )
 
 
@@ -77,6 +78,7 @@ def register_all_tools(mcp: FastMCP) -> None:
     register_code_execution_tools(mcp)
     register_transdisciplinary_tools(mcp)
     register_google_tools(mcp)
+    register_import_tools(mcp)
 
     # Register resources and prompts
     register_resources_and_prompts(mcp)

@@ -12,6 +12,7 @@ from .files import register_file_tools
 from .google_tools import register_google_tools
 from .gradebook import register_gradebook_tools
 from .groups import register_group_tools
+from .imports import register_import_tools
 from .messaging import register_messaging_tools
 from .modules import register_module_tools
 from .other_tools import register_other_tools
@@ -46,4 +47,5 @@ __all__ = [
     'register_page_tools',
     'register_transdisciplinary_tools',
     'register_google_tools',
+    'register_import_tools',
 ]
